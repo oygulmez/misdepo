@@ -1,0 +1,108 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+1. PROJE ÖZETİ VE HEDEFLER
+Bu proje, ambalaj ve temizlik ürünleri satışı yapan yerel bir esnaf için, müşterilerin kolayca sipariş verebileceği, modern ve mobil öncelikli bir e-ticaret web sitesi ile bu sitenin tüm içeriğini yönetebileceği kapsamlı bir yönetim paneli oluşturmayı hedefler. Sistemin temel amacı, kullanıcıların üyelik zorunluluğu olmadan, hızlı ve basit bir şekilde siparişlerini tamamlamalarını sağlamaktır.
+
+2. TEMEL GEREKSİNİMLER VE PRENSİPLER
+Projenin her aşamasında aşağıdaki temel prensiplere sadık kalınmalıdır:
+
+Mobil-First Yaklaşımı: Tasarım ve geliştirme süreci öncelikle mobil cihazlar (akıllı telefonlar) için planlanmalı, ardından tablet ve masaüstü bilgisayar ekranlarına uyumlu hale getirilmelidir. Tüm fonksiyonlar mobil cihazlarda kusursuz çalışmalıdır.
+Tasarım Tutarlılığı: Web sitesi ve yönetim panelinde kullanılacak olan renk paleti, tipografi, ikon setleri, buton stilleri ve bileşenler (form elemanları, kartlar vb.) proje genelinde tutarlı olmalıdır. Bu, marka kimliğini güçlendirir ve kullanıcı deneyimini iyileştirir.
+Kapsamlı Yönetim Paneli: Site sahibi, kodlama bilgisine ihtiyaç duymadan ürünleri, kategorileri, siparişleri ve diğer site içeriklerini kolayca yönetebilmelidir.
+%100 SEO Uyumluluğu: Arama motorları tarafından kolayca taranabilir ve dizine eklenebilir bir yapı hedeflenmektedir. Bu kapsamda; temiz URL yapısı, meta etiket yönetimi, site haritası (sitemap.xml), robots.txt dosyası ve yapısal veri (Schema.org) entegrasyonları sağlanmalıdır.
+3. WEB SİTESİ (KULLANICI ARAYÜZÜ - FRONTEND)
+3.1. Genel Yapı ve Sayfalar
+Ana Sayfa:
+Marka logosu, kategori menüsü ve sepet ikonu içeren bir başlık (Header).
+Dikkat çekici bir "Kampanyalı Ürünler" bölümü.
+Ürün kategorilerine yönlendiren görsel bloklar veya listeler.
+İletişim bilgileri, adres ve sosyal medya linklerini içeren bir altbilgi (Footer).
+Ürün Listeleme Sayfası (Kategori Sayfası):
+Seçilen kategoriye ait ürünlerin listelendiği, profesyonel görünümlü bir ızgara (grid) yapısı.
+Her ürün kartında; ürün görseli, ürün adı, fiyatı ve "Sepete Ekle" butonu bulunmalıdır.
+Fiyata göre (artan/azalan) veya isme göre sıralama seçenekleri.
+Ürün Detay Sayfası:
+Büyük ürün görseli veya görsel galerisi.
+Ürün adı, fiyatı (varsa indirimli/kampanyalı fiyatı).
+Detaylı ürün açıklaması.
+Adet seçici (quantity selector).
+"Sepete Ekle" butonu.
+Sepet ve Sipariş Süreci (Üye Olmadan):
+Kullanıcı ürünleri sepete ekler.
+Sepet sayfasında ürünleri, adetleri ve toplam tutarı görür.
+"Sipariş Ver" butonuna tıklar.
+Karşısına çıkan tek adımlı formda aşağıdaki bilgileri doldurur:
+Ad Soyad: Metin girişi, zorunlu.
+İrtibat Telefon Numarası: Numara girişi, zorunlu.
+Teslimat Adresi: Detaylı adres için metin alanı (textarea), zorunlu.
+Ödeme Yöntemi: Seçenekli (radio button) alan:
+Kapıda Ödeme / Kredi Kartı
+Kapıda Ödeme / Nakit
+Havale / EFT
+"Sipariş Onayla" butonu ile siparişi tamamlar ve bir teşekkür/onay sayfasına yönlendirilir.
+4. YÖNETİM PANELİ (BACKEND)
+4.1. Dashboard (Gösterge Paneli)
+Sisteme giriş yapıldığında karşılaşılan özet ekranı. Aşağıdaki bileşenleri içermelidir:
+
+Güncel sipariş sayısı (günlük/haftalık).
+Toplam ciro (günlük/haftalık).
+Onay bekleyen siparişlerin listesi.
+En son gelen 5 siparişin özeti.
+Stok adedi kritik seviyeye düşen ürünler için bir uyarı alanı.
+4.2. Ürünler
+Kapsamlı ürün yönetimi sayfası.
+
+Ürün Listesi: Tüm ürünlerin tablo formatında listesi (Sıra No, Görsel, Ürün Adı, Fiyat, Stok, Kategori, Durum).
+Filtreleme ve Arama: Ürün adına, kategoriye veya duruma (aktif/pasif) göre filtreleme ve arama alanı.
+Toplu İşlemler: Birden fazla ürünü seçerek toplu olarak silme, pasif hale getirme veya kampanyaya dahil etme.
+Ürün Ekleme/Düzenleme Formu:
+Ürün Adı: Metin girişi.
+Ürün Fiyatı: Sayısal giriş (₺ formatında).
+Ürün Açıklaması: Zengin metin editörü (bold, italic, liste yapma vb.).
+Ürün Kategorisi: Mevcut kategorilerden seçim yapabilen açılır menü (dropdown).
+Ürün Varyantı (Opsiyonel): Örneğin, "1 Litre", "5 Litre" gibi varyantlar ekleme imkanı.
+Kampanya Yönetimi:
+"Ürünü kampanyaya dahil et" onay kutusu (checkbox).
+İşaretlendiğinde açılan alanlar:
+Kampanyalı Fiyatı: Sayısal giriş.
+Kampanya Başlangıç Tarihi: Tarih seçici.
+Kampanya Bitiş Tarihi: Tarih seçici.
+Ürün Silme/Güncelleme: Standart CRUD (Create, Read, Update, Delete) işlemleri.
+4.3. Kategoriler
+Ürünleri gruplamak için kullanılır.
+
+Kategori Listesi: Mevcut kategorilerin hiyerarşik (alt alta) listesi.
+Alt Kategori Desteği: Her kategorinin altına sınırsız sayıda alt kategori eklenebilmelidir.
+Kategori Ekleme/Düzenleme Formu:
+Kategori Adı: Metin girişi.
+Üst Kategori: Kategorinin hangi kategoriye bağlı olacağını seçmek için açılır menü (Ana kategori için "Yok" seçeneği olmalı).
+Kategori Silme/Güncelleme: Standart CRUD işlemleri.
+4.4. Siparişler
+Gelen tüm siparişlerin yönetildiği menü.
+
+Sipariş Listesi: Tüm siparişlerin tablo formatında listesi (Sipariş No, Müşteri Adı, Tarih, Tutar, Sipariş Durumu).
+Filtreleme: Sipariş durumuna (Yeni Sipariş, Hazırlanıyor, Tamamlandı, İptal Edildi) veya tarih aralığına göre filtreleme.
+Sipariş Detay: Her siparişin yanında bulunan "Detay" butonu ile;
+Müşterinin verdiği tüm bilgiler (ad, telefon, adres).
+Sipariş edilen ürünlerin listesi, adetleri ve fiyatları.
+Seçilen ödeme yöntemi.
+Toplam tutar.
+Sipariş Düzenleme:
+Sipariş Durumunu Güncelleme: (Yeni, Hazırlanıyor, Teslim Edildi vb.).
+Siparişe yönetici notu ekleme.
+Toplu İşlemler: Birden fazla siparişi seçip durumlarını toplu olarak güncelleme (örn: "Hazırlanıyor" olarak işaretle).
+4.5. Müşteriler
+Sipariş vermiş olan kullanıcıların otomatik olarak kaydedildiği bölüm.
+
+Müşteri Listesi: Müşterilerin tablo formatında listesi (Ad Soyad, İrtibat No, Adres, Toplam Sipariş Sayısı).
+Bu bölüm, gelecekteki SMS veya e-posta pazarlama kampanyaları için bir veri tabanı görevi görebilir.
+4.6. Ayarlar
+Genel site ve panel yönetimi.
+
+Site Ayarları: Web sitesinin başlığı, logosu, iletişim bilgileri gibi temel bilgilerin düzenlendiği alan.
+Yönetici Ayarları: Yönetim paneli kullanıcı şifresinin değiştirilmesi.
+
+Ödeme Ayarları: Havale/EFT için banka hesap bilgilerinin girildiği alan.
