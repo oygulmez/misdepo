@@ -40,6 +40,7 @@ export interface Database {
         Row: {
           id: string
           name: string
+          slug?: string
           description: string | null
           price: number
           campaign_price: number | null
@@ -63,6 +64,7 @@ export interface Database {
         Insert: {
           id?: string
           name: string
+          slug?: string
           description?: string | null
           price: number
           campaign_price?: number | null
@@ -86,6 +88,7 @@ export interface Database {
         Update: {
           id?: string
           name?: string
+          slug?: string
           description?: string | null
           price?: number
           campaign_price?: number | null

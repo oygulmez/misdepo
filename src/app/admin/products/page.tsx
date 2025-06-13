@@ -1,8 +1,35 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { productsApi, categoriesApi } from '@/lib/database'
 import { Product, Category } from '@/lib/database.types'
+import { useToast } from '@/context/ToastContext'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Switch } from '@/components/ui/switch'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { 
+  Package,
+  Plus,
+  Edit,
+  Trash2,
+  Star,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  Search,
+  Filter,
+  Tag,
+  ShoppingCart
+} from 'lucide-react'
 
 interface ProductForm {
   name: string
@@ -22,6 +49,9 @@ export default function AdminProductsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const { success, error: showError } = useToast()
   
   const [form, setForm] = useState<ProductForm>({
     name: '',
@@ -51,6 +81,7 @@ export default function AdminProductsPage() {
       setCategories(categoriesData)
     } catch (error) {
       console.error('Data loading error:', error)
+      showError('Hata', 'Veriler yüklenirken hata oluştu')
     } finally {
       setLoading(false)
     }
@@ -126,36 +157,35 @@ export default function AdminProductsPage() {
       
       if (editingProduct) {
         await productsApi.update(editingProduct.id, productData)
+        success('Başarılı!', 'Ürün başarıyla güncellendi!')
       } else {
         await productsApi.create(productData)
+        success('Başarılı!', 'Ürün başarıyla eklendi!')
       }
       
       await loadData()
       setShowModal(false)
       resetForm()
-      
-      alert(editingProduct ? 'Ürün başarıyla güncellendi!' : 'Ürün başarıyla eklendi!')
     } catch (error) {
       console.error('Product save error:', error)
-      alert('Ürün kaydedilirken hata oluştu.')
+      showError('Hata!', 'Ürün kaydedilirken hata oluştu.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Bu ürünü silmek istediğinizden emin misiniz?')) {
-      return
-    }
+  const handleDelete = async () => {
+    if (!deleteConfirm) return
     
     try {
       setLoading(true)
-      await productsApi.delete(id)
+      await productsApi.delete(deleteConfirm)
       await loadData()
-      alert('Ürün başarıyla silindi!')
+      success('Başarılı!', 'Ürün başarıyla silindi!')
+      setDeleteConfirm(null)
     } catch (error) {
       console.error('Product delete error:', error)
-      alert('Ürün silinirken hata oluştu.')
+      showError('Hata!', 'Ürün silinirken hata oluştu.')
     } finally {
       setLoading(false)
     }
@@ -165,9 +195,10 @@ export default function AdminProductsPage() {
     try {
       await productsApi.update(product.id, { is_featured: !product.is_featured })
       await loadData()
+      success('Başarılı!', 'Ürün durumu güncellendi!')
     } catch (error) {
       console.error('Toggle featured error:', error)
-      alert('Ürün durumu güncellenirken hata oluştu.')
+      showError('Hata!', 'Ürün durumu güncellenirken hata oluştu.')
     }
   }
 
@@ -175,369 +206,461 @@ export default function AdminProductsPage() {
     try {
       await productsApi.update(product.id, { is_active: !product.is_active })
       await loadData()
+      success('Başarılı!', 'Ürün durumu güncellendi!')
     } catch (error) {
       console.error('Toggle active error:', error)
-      alert('Ürün durumu güncellenirken hata oluştu.')
+      showError('Hata!', 'Ürün durumu güncellenirken hata oluştu.')
     }
   }
 
-  const formatPrice = (amount: number) => `₺${amount.toFixed(2)}`
+  const formatPrice = (amount: number) => {
+    return new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      minimumFractionDigits: 2
+    }).format(amount)
+  }
 
   const getCategoryName = (categoryId: string) => {
     const category = categories.find(c => c.id === categoryId)
     return category ? category.name : 'Kategori bulunamadı'
   }
 
+  // Filter products based on search and category
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         product.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesCategory = categoryFilter === 'all' || product.category_id === categoryFilter
+    return matchesSearch && matchesCategory
+  })
+
+  const getProductStats = () => {
+    return {
+      total: products.length,
+      active: products.filter(p => p.is_active).length,
+      featured: products.filter(p => p.is_featured).length,
+      campaign: products.filter(p => p.is_campaign).length
+    }
+  }
+
+  const stats = getProductStats()
+
   if (loading && products.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Ürünler yükleniyor...</p>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ürün Yönetimi</h1>
-          <p className="text-gray-600 mt-2">
-            Toplam {products.length} ürün
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setShowModal(true)
-          }}
-          className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
-        >
-          + Yeni Ürün
-        </button>
-      </div>
+    <div className="px-4 sm:px-6 lg:px-8 py-8">
+      <div className="space-y-8">
+        
+        {/* Toolbar */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-lg font-semibold">Ürün Yönetimi</h3>
+                <p className="text-sm text-muted-foreground">Toplam {products.length} ürün</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                <div className="flex gap-2">
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      placeholder="Ürün ara..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="w-48">
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger>
+                        <Filter className="h-4 w-4 mr-2" />
+                        <SelectValue placeholder="Kategori" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tüm Kategoriler</SelectItem>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button onClick={() => setShowModal(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Yeni Ürün
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Products Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {products.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ürün
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Kategori
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fiyat
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Durum
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Özellikler
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    İşlemler
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {products.map((product) => (
-                  <tr key={product.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="w-12 h-12 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg flex items-center justify-center flex-shrink-0 mr-4">
-                          <span className="text-xl">🧴</span>
-                        </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Package className="h-8 w-8 text-blue-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Toplam Ürün</p>
+                  <p className="text-2xl font-bold">{stats.total}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Eye className="h-8 w-8 text-green-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Aktif</p>
+                  <p className="text-2xl font-bold">{stats.active}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Star className="h-8 w-8 text-yellow-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Öne Çıkan</p>
+                  <p className="text-2xl font-bold">{stats.featured}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Tag className="h-8 w-8 text-red-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Kampanyalı</p>
+                  <p className="text-2xl font-bold">{stats.campaign}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Filtreler</CardTitle>
+            <CardDescription>Ürünleri arayın ve filtreleyin</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Ürün ara..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+              <div className="w-48">
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger>
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Kategori" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tüm Kategoriler</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Products Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Package className="h-5 w-5 mr-2" />
+              Ürün Listesi
+            </CardTitle>
+            <CardDescription>
+              {filteredProducts.length} ürün listeleniyor
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {filteredProducts.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ürün</TableHead>
+                    <TableHead>Kategori</TableHead>
+                    <TableHead>Fiyat</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead>Özellikler</TableHead>
+                    <TableHead>İşlemler</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {product.name}
-                          </div>
-                          <div className="text-sm text-gray-500 line-clamp-1">
-                            {product.description}
+                          <div className="font-medium">{product.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {product.description?.substring(0, 60)}...
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {getCategoryName(product.category_id)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {formatPrice(product.price)}
-                      </div>
-                      {product.is_campaign && product.campaign_price && (
-                        <div className="text-sm text-red-600">
-                          Kampanya: {formatPrice(product.campaign_price)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {getCategoryName(product.category_id)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{formatPrice(product.price)}</div>
+                          {product.is_campaign && product.campaign_price && (
+                            <div className="text-sm text-green-600">
+                              Kampanya: {formatPrice(product.campaign_price)}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col space-y-1">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          product.is_active 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {product.is_active ? 'Aktif' : 'Pasif'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col space-y-1">
-                        {product.is_featured && (
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                            Öne Çıkan
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={product.is_active}
+                            onCheckedChange={(checked: boolean) => toggleActive(product)}
+                          />
+                          <span className="text-sm">
+                            {product.is_active ? 'Aktif' : 'Pasif'}
                           </span>
-                        )}
-                        {product.is_campaign && (
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                            Kampanyalı
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex flex-col space-y-1">
-                        <div className="flex space-x-2">
-                          <button
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {product.is_featured && (
+                            <Badge variant="default" className="bg-yellow-100 text-yellow-800">
+                              <Star className="h-3 w-3 mr-1" />
+                              Öne Çıkan
+                            </Badge>
+                          )}
+                          {product.is_campaign && (
+                            <Badge variant="destructive">
+                              <Tag className="h-3 w-3 mr-1" />
+                              Kampanya
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleEdit(product)}
-                            className="text-primary-600 hover:text-primary-800 font-medium"
                           >
-                            Düzenle
-                          </button>
-                          <button
-                            onClick={() => handleDelete(product.id)}
-                            className="text-red-600 hover:text-red-800 font-medium"
-                          >
-                            Sil
-                          </button>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => toggleActive(product)}
-                            className="text-sm text-gray-600 hover:text-gray-800"
-                          >
-                            {product.is_active ? 'Pasifleştir' : 'Aktifleştir'}
-                          </button>
-                          <button
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => toggleFeatured(product)}
-                            className="text-sm text-gray-600 hover:text-gray-800"
+                            className={product.is_featured ? 'bg-yellow-50' : ''}
                           >
-                            {product.is_featured ? 'Öne Çıkarmayı Kaldır' : 'Öne Çıkar'}
-                          </button>
+                            <Star className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setDeleteConfirm(product.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-12 text-gray-500">
-            Henüz ürün eklenmemiş.
-          </div>
-        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8">
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">
+                  {searchQuery || categoryFilter !== 'all' ? 'Filtrelere uygun ürün bulunamadı' : 'Henüz ürün eklenmemiş'}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Product Form Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowModal(false)}></div>
-            
-            <div className="relative bg-white rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold">
-                  {editingProduct ? 'Ürün Düzenle' : 'Yeni Ürün Ekle'}
-                </h2>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <span className="text-2xl">✕</span>
-                </button>
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Package className="h-5 w-5 mr-2" />
+              {editingProduct ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle'}
+            </DialogTitle>
+            <DialogDescription>
+              Ürün bilgilerini doldurun ve kaydedin.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="name">Ürün Adı *</Label>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Ürün adı"
+                />
+                {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Product Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ürün Adı *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      errors.name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Ürün adını girin"
-                  />
-                  {errors.name && (
-                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
-                  )}
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Açıklama *
-                  </label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      errors.description ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Ürün açıklamasını girin"
-                  />
-                  {errors.description && (
-                    <p className="text-red-500 text-sm mt-1">{errors.description}</p>
-                  )}
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Kategori *
-                  </label>
-                  <select
-                    value={form.category_id}
-                    onChange={(e) => setForm(prev => ({ ...prev, category_id: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      errors.category_id ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  >
-                    <option value="">Kategori seçin</option>
+              
+              <div>
+                <Label htmlFor="category">Kategori *</Label>
+                <Select value={form.category_id} onValueChange={(value) => 
+                  setForm(prev => ({ ...prev, category_id: value }))
+                }>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Kategori seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
                     {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
+                      <SelectItem key={category.id} value={category.id}>
                         {category.name}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </select>
-                  {errors.category_id && (
-                    <p className="text-red-500 text-sm mt-1">{errors.category_id}</p>
-                  )}
-                </div>
-
-                {/* Price */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fiyat (₺) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.price}
-                    onChange={(e) => setForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      errors.price ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  {errors.price && (
-                    <p className="text-red-500 text-sm mt-1">{errors.price}</p>
-                  )}
-                </div>
-
-                {/* Campaign */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="is_campaign"
-                    checked={form.is_campaign}
-                    onChange={(e) => setForm(prev => ({ ...prev, is_campaign: e.target.checked }))}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="is_campaign" className="ml-2 text-sm text-gray-700">
-                    Kampanyalı ürün
-                  </label>
-                </div>
-
-                {/* Campaign Price */}
-                {form.is_campaign && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Kampanya Fiyatı (₺) *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.campaign_price || ''}
-                      onChange={(e) => setForm(prev => ({ ...prev, campaign_price: parseFloat(e.target.value) || null }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                        errors.campaign_price ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {errors.campaign_price && (
-                      <p className="text-red-500 text-sm mt-1">{errors.campaign_price}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Checkboxes */}
-                <div className="flex space-x-6">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="is_active"
-                      checked={form.is_active}
-                      onChange={(e) => setForm(prev => ({ ...prev, is_active: e.target.checked }))}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="is_active" className="ml-2 text-sm text-gray-700">
-                      Aktif
-                    </label>
-                  </div>
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="is_featured"
-                      checked={form.is_featured}
-                      onChange={(e) => setForm(prev => ({ ...prev, is_featured: e.target.checked }))}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="is_featured" className="ml-2 text-sm text-gray-700">
-                      Öne çıkan ürün
-                    </label>
-                  </div>
-                </div>
-
-                {/* Submit Buttons */}
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
-                  >
-                    {loading ? 'Kaydediliyor...' : (editingProduct ? 'Güncelle' : 'Ekle')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
-                  >
-                    İptal
-                  </button>
-                </div>
-              </form>
+                  </SelectContent>
+                </Select>
+                {errors.category_id && <p className="text-sm text-destructive">{errors.category_id}</p>}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+            
+            <div>
+              <Label htmlFor="description">Açıklama *</Label>
+              <Textarea
+                id="description"
+                value={form.description}
+                onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Ürün açıklaması"
+                rows={3}
+              />
+              {errors.description && <p className="text-sm text-destructive">{errors.description}</p>}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="price">Normal Fiyat (₺) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.price}
+                  onChange={(e) => setForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0.00"
+                />
+                {errors.price && <p className="text-sm text-destructive">{errors.price}</p>}
+              </div>
+              
+              <div>
+                <Label htmlFor="campaign_price">Kampanya Fiyatı (₺)</Label>
+                <Input
+                  id="campaign_price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.campaign_price || ''}
+                  onChange={(e) => setForm(prev => ({ 
+                    ...prev, 
+                    campaign_price: e.target.value ? parseFloat(e.target.value) : null 
+                  }))}
+                  placeholder="0.00"
+                  disabled={!form.is_campaign}
+                />
+                {errors.campaign_price && <p className="text-sm text-destructive">{errors.campaign_price}</p>}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex items-center space-x-2">
+                                 <Switch
+                   id="is_active"
+                   checked={form.is_active}
+                   onCheckedChange={(checked: boolean) => setForm(prev => ({ ...prev, is_active: checked }))}
+                 />
+                <Label htmlFor="is_active">Aktif</Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                                 <Switch
+                   id="is_featured"
+                   checked={form.is_featured}
+                   onCheckedChange={(checked: boolean) => setForm(prev => ({ ...prev, is_featured: checked }))}
+                 />
+                <Label htmlFor="is_featured">Öne Çıkan</Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                                 <Switch
+                   id="is_campaign"
+                   checked={form.is_campaign}
+                   onCheckedChange={(checked: boolean) => setForm(prev => ({ ...prev, is_campaign: checked }))}
+                 />
+                <Label htmlFor="is_campaign">Kampanyalı</Label>
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+                İptal
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Kaydediliyor...' : (editingProduct ? 'Güncelle' : 'Ekle')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ürünü Sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu ürünü silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 } 

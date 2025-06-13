@@ -5,15 +5,19 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCart } from '@/context/CartContext'
 import { useToast } from '@/context/ToastContext'
-import { productsApi } from '@/lib/database'
+import { productsApi, createSlug } from '@/lib/database'
 import { Product } from '@/lib/database.types'
+
+interface ProductWithCategory extends Product {
+  categories?: { id: string, name: string }
+}
 
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const productId = params.id as string
+  const productSlug = params.slug as string
   
-  const [product, setProduct] = useState<Product | null>(null)
+  const [product, setProduct] = useState<ProductWithCategory | null>(null)
   const [loading, setLoading] = useState(true)
   const [quantity, setQuantity] = useState(1)
   const [addingToCart, setAddingToCart] = useState(false)
@@ -23,29 +27,46 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     async function loadProduct() {
-      if (!productId) {
+      if (!productSlug) {
         setLoading(false)
         return
       }
 
       try {
-        // Try to get by ID first, then by slug if that fails
-        const productData = await productsApi.getById(productId)
-        setProduct(productData)
+        console.log('🔍 Slug araniyor:', productSlug)
         
-        // Redirect to SEO-friendly URL if we have a slug
-        if (productData.slug) {
-          router.replace(`/urun/${productData.slug}`)
+        // Get ALL products and find by slug matching
+        const allProducts = await productsApi.getAll({
+          is_active: true
+        })
+        
+        console.log('📊 Toplam ürün sayısı:', allProducts.length)
+        
+        // Find product by matching generated slug
+        const matchingProduct = allProducts.find(product => {
+          const generatedSlug = createSlug(product.name)
+          console.log(`🔗 "${product.name}" -> "${generatedSlug}" (aranan: "${productSlug}")`)
+          return generatedSlug === productSlug
+        })
+        
+        if (matchingProduct) {
+          console.log('✅ Ürün bulundu:', matchingProduct.name)
+          setProduct(matchingProduct)
+        } else {
+          console.log('❌ Slug eşleşen ürün bulunamadı')
+          showError('Hata!', 'Ürün bulunamadı')
         }
+        
       } catch (error) {
-        console.error('Error loading product:', error)
+        console.error('❌ Ürün yükleme hatası:', error)
+        showError('Hata!', 'Ürün yüklenirken bir hata oluştu')
       } finally {
         setLoading(false)
       }
     }
 
     loadProduct()
-  }, [productId, router])
+  }, [productSlug, showError])
 
   const handleAddToCart = async () => {
     if (!product) return
@@ -56,9 +77,9 @@ export default function ProductDetailPage() {
       
       // Show success feedback
       success('Sepete Eklendi!', `${product.name} sepetinize eklendi`)
-          } catch (error) {
-        console.error('Error adding to cart:', error)
-        showError('Hata!', 'Sepete eklenirken bir hata oluştu')
+    } catch (error) {
+      console.error('Error adding to cart:', error)
+      showError('Hata!', 'Sepete eklenirken bir hata oluştu')
     } finally {
       setAddingToCart(false)
     }
@@ -69,7 +90,8 @@ export default function ProductDetailPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Ürün bilgileri yükleniyor...</p>
+          <p className="text-gray-600">🔍 SEO uyumlu ürün aranıyor...</p>
+          <p className="text-sm text-gray-500 mt-2">Slug: {productSlug}</p>
         </div>
       </div>
     )
@@ -84,15 +106,20 @@ export default function ProductDetailPage() {
             <h1 className="text-3xl font-bold mb-4 text-gray-900">
               Ürün Bulunamadı
             </h1>
-            <p className="text-gray-600 mb-8">
-              Aradığınız ürün bulunamadı veya silinmiş olabilir.
+            <p className="text-gray-600 mb-4">
+              Bu SEO slug&apos;ına sahip ürün bulunamadı.
             </p>
-            <Link 
-              href="/"
-              className="inline-block bg-primary-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors"
-            >
-              Ana Sayfaya Dön
-            </Link>
+            <p className="text-sm text-gray-500 mb-8">
+              Aranan slug: <code className="bg-gray-200 px-2 py-1 rounded">{productSlug}</code>
+            </p>
+            <div className="space-x-4">
+              <Link 
+                href="/"
+                className="inline-block bg-primary-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors"
+              >
+                Ana Sayfaya Dön
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -126,6 +153,11 @@ export default function ProductDetailPage() {
 
       <div className="py-8">
         <div className="container-mobile sm:container-tablet lg:container-desktop">
+          {/* SEO Info */}
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-sm">
+            <strong>✅ SEO Uyumlu URL:</strong> /urun/{productSlug}
+          </div>
+          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             
             {/* Product Image */}
@@ -161,7 +193,9 @@ export default function ProductDetailPage() {
                 
                 {/* Category */}
                 <p className="text-gray-600">
-                  Kategori: <span className="font-medium">Ürün Kategorisi</span>
+                  Kategori: <span className="font-medium">
+                    {product.categories?.name || 'Genel'}
+                  </span>
                 </p>
               </div>
 
@@ -202,25 +236,6 @@ export default function ProductDetailPage() {
                   </p>
                 </div>
               )}
-
-              {/* Specifications */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Ürün Özellikleri</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Kategori:</span>
-                    <span className="font-medium">Ürün Kategorisi</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Ürün Kodu:</span>
-                    <span className="font-medium">{product.id.slice(0, 8).toUpperCase()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Durumu:</span>
-                    <span className="font-medium text-green-600">Aktif</span>
-                  </div>
-                </div>
-              </div>
 
               {/* Quantity Selector */}
               <div className="space-y-4">

@@ -1,9 +1,47 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { ordersApi } from '@/lib/database'
 import { useToast } from '@/context/ToastContext'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { 
+  ShoppingCart, 
+  Eye, 
+  Edit, 
+  Clock, 
+  CheckCircle, 
+  XCircle,
+  Package,
+  Truck,
+  MapPin,
+  Phone,
+  Calendar,
+  CreditCard,
+  ArrowLeft
+} from 'lucide-react'
+
+interface OrderItem {
+  id: string
+  order_id: string
+  product_id: string
+  product_name: string
+  quantity: number
+  unit_price: number
+  products?: {
+    id: string
+    name: string
+  }
+}
 
 interface Order {
   id: string
@@ -19,7 +57,7 @@ interface Order {
   admin_notes?: string
   created_at: string
   updated_at: string
-  order_items?: any[]
+  order_items?: OrderItem[]
 }
 
 export default function AdminOrdersPage() {
@@ -33,6 +71,7 @@ export default function AdminOrdersPage() {
     notes: ''
   })
   const [showStatusModal, setShowStatusModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
   const { success, error: showError } = useToast()
 
   useEffect(() => {
@@ -63,10 +102,7 @@ export default function AdminOrdersPage() {
         statusUpdate.notes || undefined
       )
       
-      // Reload orders
       await loadOrders()
-      
-      // Close modal
       setShowStatusModal(false)
       setStatusUpdate({ orderId: '', status: '', notes: '' })
       
@@ -79,7 +115,13 @@ export default function AdminOrdersPage() {
     }
   }
 
-  const formatPrice = (amount: number) => `₺${amount.toFixed(2)}`
+  const formatPrice = (amount: number) => {
+    return new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      minimumFractionDigits: 2
+    }).format(amount)
+  }
   
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR', {
@@ -91,27 +133,22 @@ export default function AdminOrdersPage() {
     })
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'confirmed': return 'bg-blue-100 text-blue-800'
-      case 'preparing': return 'bg-orange-100 text-orange-800'
-      case 'shipped': return 'bg-purple-100 text-purple-800'
-      case 'delivered': return 'bg-green-100 text-green-800'
-      case 'cancelled': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return 'Beklemede'
-      case 'confirmed': return 'Onaylandı'
-      case 'preparing': return 'Hazırlanıyor'
-      case 'shipped': return 'Kargoya Verildi'
-      case 'delivered': return 'Teslim Edildi'
-      case 'cancelled': return 'İptal Edildi'
-      default: return status
+      case 'pending': 
+        return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Beklemede</Badge>
+      case 'confirmed': 
+        return <Badge variant="default"><CheckCircle className="h-3 w-3 mr-1" />Onaylandı</Badge>
+      case 'preparing': 
+        return <Badge variant="outline"><Package className="h-3 w-3 mr-1" />Hazırlanıyor</Badge>
+      case 'shipped': 
+        return <Badge variant="default"><Truck className="h-3 w-3 mr-1" />Kargoda</Badge>
+      case 'delivered': 
+        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Teslim Edildi</Badge>
+      case 'cancelled': 
+        return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />İptal</Badge>
+      default: 
+        return <Badge variant="outline">{status}</Badge>
     }
   }
 
@@ -133,324 +170,515 @@ export default function AdminOrdersPage() {
     { value: 'cancelled', label: 'İptal Edildi' }
   ]
 
+  const getOrderStats = () => {
+    return {
+      total: orders.length,
+      pending: orders.filter(o => o.status === 'pending').length,
+      confirmed: orders.filter(o => o.status === 'confirmed').length,
+      preparing: orders.filter(o => o.status === 'preparing').length,
+      shipped: orders.filter(o => o.status === 'shipped').length,
+      delivered: orders.filter(o => o.status === 'delivered').length,
+      cancelled: orders.filter(o => o.status === 'cancelled').length
+    }
+  }
+
+  const stats = getOrderStats()
+
   if (loading && orders.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <LoadingSpinner size="large" />
-          <p className="mt-4 text-gray-600">Siparişler yükleniyor...</p>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Siparişler</h1>
-          <p className="text-gray-600 mt-2">
-            Toplam {orders.length} sipariş
-          </p>
-        </div>
-      </div>
+    <div className="px-4 sm:px-6 lg:px-8 py-8">
+      <div className="space-y-8">
+        
+        {/* Toolbar */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold">Sipariş Yönetimi</h3>
+                <p className="text-sm text-muted-foreground">Toplam {orders.length} sipariş</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === 'all'
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Tümü ({orders.length})
-          </button>
-          {statusOptions.map((status) => {
-            const count = orders.filter(order => order.status === status.value).length
-            return (
-              <button
-                key={status.value}
-                onClick={() => setFilter(status.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filter === status.value
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {status.label} ({count})
-              </button>
-            )
-          })}
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold">{stats.total}</div>
+                <div className="text-sm text-muted-foreground">Toplam</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+                <div className="text-sm text-muted-foreground">Beklemede</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.confirmed}</div>
+                <div className="text-sm text-muted-foreground">Onaylandı</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">{stats.preparing}</div>
+                <div className="text-sm text-muted-foreground">Hazırlanıyor</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">{stats.shipped}</div>
+                <div className="text-sm text-muted-foreground">Kargoda</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.delivered}</div>
+                <div className="text-sm text-muted-foreground">Teslim</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
+                <div className="text-sm text-muted-foreground">İptal</div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </div>
 
-      {/* Orders Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {orders.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sipariş
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Müşteri
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tutar
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ödeme
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Durum
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tarih
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    İşlemler
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {order.order_number}
-                      </div>
-                      {order.notes && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          📝 Not var
+        {/* Filters */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Filtreler</CardTitle>
+            <CardDescription>Siparişleri durumlarına göre filtreleyin</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={filter} onValueChange={setFilter} className="w-full">
+              <TabsList className="grid w-full grid-cols-7">
+                <TabsTrigger value="all">Tümü</TabsTrigger>
+                <TabsTrigger value="pending">Beklemede</TabsTrigger>
+                <TabsTrigger value="confirmed">Onaylandı</TabsTrigger>
+                <TabsTrigger value="preparing">Hazırlanıyor</TabsTrigger>
+                <TabsTrigger value="shipped">Kargoda</TabsTrigger>
+                <TabsTrigger value="delivered">Teslim</TabsTrigger>
+                <TabsTrigger value="cancelled">İptal</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Orders Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <ShoppingCart className="h-5 w-5 mr-2" />
+              Sipariş Listesi
+            </CardTitle>
+            <CardDescription>
+              {filter === 'all' ? 'Tüm siparişler' : `${statusOptions.find(s => s.value === filter)?.label} siparişler`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {orders.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sipariş No</TableHead>
+                    <TableHead>Müşteri</TableHead>
+                    <TableHead>Ürünler</TableHead>
+                    <TableHead>Tutar</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead>Ödeme</TableHead>
+                    <TableHead>Tarih</TableHead>
+                    <TableHead>İşlemler</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">
+                        #{order.order_number}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{order.customer_name}</div>
+                          <div className="text-sm text-muted-foreground flex items-center">
+                            <Phone className="h-3 w-3 mr-1" />
+                            {order.customer_phone}
+                          </div>
                         </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {order.customer_name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {order.customer_phone}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {order.order_items && order.order_items.length > 0 ? (
+                            <div>
+                              <div className="font-medium text-primary">
+                                {order.order_items.length} ürün
+                              </div>
+                              <div className="text-muted-foreground">
+                                                                 {order.order_items.reduce((total: number, item: OrderItem) => total + item.quantity, 0)} adet
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-muted-foreground">-</div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
                         {formatPrice(order.total_amount)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {getPaymentMethodText(order.payment_method)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.status)}`}>
-                        {getStatusText(order.status)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(order.created_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="text-primary-600 hover:text-primary-800 font-medium"
-                        >
-                          Detay
-                        </button>
-                        <button
-                          onClick={() => {
-                            setStatusUpdate({
-                              orderId: order.id,
-                              status: order.status,
-                              notes: order.admin_notes || ''
-                            })
-                            setShowStatusModal(true)
-                          }}
-                          className="text-green-600 hover:text-green-800 font-medium"
-                        >
-                          Durum
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-12 text-gray-500">
-            {filter === 'all' ? 'Henüz sipariş bulunmuyor.' : `Bu durumda sipariş bulunmuyor.`}
-          </div>
-        )}
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(order.status)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <CreditCard className="h-3 w-3 mr-1" />
+                          {getPaymentMethodText(order.payment_method)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <Calendar className="h-3 w-3 mr-1" />
+                          {formatDate(order.created_at)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedOrder(order)
+                              setShowDetailModal(true)
+                            }}
+                          >
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setStatusUpdate({
+                                orderId: order.id,
+                                status: order.status,
+                                notes: order.admin_notes || ''
+                              })
+                              setShowStatusModal(true)
+                            }}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8">
+                <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">Sipariş bulunamadı</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Order Detail Modal */}
-      {selectedOrder && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setSelectedOrder(null)}></div>
-            
-            <div className="relative bg-white rounded-lg max-w-4xl w-full max-h-screen overflow-y-auto p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold">
-                  Sipariş Detayı - {selectedOrder.order_number}
-                </h2>
-                <button
-                  onClick={() => setSelectedOrder(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <span className="text-2xl">✕</span>
-                </button>
-              </div>
-
+      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center">
+              <Package className="h-5 w-5 mr-2" />
+              Sipariş Detayı #{selectedOrder?.order_number}
+            </DialogTitle>
+            <DialogDescription>
+              Sipariş detayları ve müşteri bilgileri
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedOrder && (
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+              
+              {/* Müşteri ve Sipariş Bilgileri */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Customer Info */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Müşteri Bilgileri</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <p><strong>Ad Soyad:</strong> {selectedOrder.customer_name}</p>
-                    <p><strong>Telefon:</strong> {selectedOrder.customer_phone}</p>
-                    <p><strong>Adres:</strong> {selectedOrder.customer_address}</p>
-                  </div>
-                </div>
+                
+                {/* Sol Kolon - Müşteri Bilgileri */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">MÜŞTERİ BİLGİLERİ</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary">
+                          {selectedOrder.customer_name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium">{selectedOrder.customer_name}</div>
+                        <div className="text-sm text-muted-foreground flex items-center">
+                          <Phone className="h-3 w-3 mr-1" />
+                          {selectedOrder.customer_phone}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start space-x-2">
+                      <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                      <div className="text-sm">{selectedOrder.customer_address}</div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {/* Order Info */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Sipariş Bilgileri</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <p><strong>Sipariş No:</strong> {selectedOrder.order_number}</p>
-                    <p><strong>Durum:</strong> 
-                      <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedOrder.status)}`}>
-                        {getStatusText(selectedOrder.status)}
+                {/* Sağ Kolon - Sipariş Bilgileri */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">SİPARİŞ BİLGİLERİ</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Durum:</span>
+                      {getStatusBadge(selectedOrder.status)}
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Ödeme:</span>
+                      <div className="flex items-center text-sm">
+                        <CreditCard className="h-3 w-3 mr-1" />
+                        {getPaymentMethodText(selectedOrder.payment_method)}
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Tarih:</span>
+                      <div className="flex items-center text-sm">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        {formatDate(selectedOrder.created_at)}
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-2 border-t">
+                      <span className="font-medium">Toplam:</span>
+                      <span className="font-bold text-lg text-primary">
+                        {formatPrice(selectedOrder.total_amount)}
                       </span>
-                    </p>
-                    <p><strong>Ödeme:</strong> {getPaymentMethodText(selectedOrder.payment_method)}</p>
-                    <p><strong>Tarih:</strong> {formatDate(selectedOrder.created_at)}</p>
-                    <p><strong>Toplam:</strong> {formatPrice(selectedOrder.total_amount)}</p>
-                  </div>
-                </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
-              {/* Notes */}
+              {/* Notlar */}
               {(selectedOrder.notes || selectedOrder.admin_notes) && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-3">Notlar</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {selectedOrder.notes && (
-                    <div className="bg-blue-50 p-4 rounded-lg mb-3">
-                      <p className="text-sm font-medium text-blue-800 mb-1">Müşteri Notu:</p>
-                      <p className="text-blue-700">{selectedOrder.notes}</p>
-                    </div>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">MÜŞTERİ NOTU</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm">{selectedOrder.notes}</p>
+                      </CardContent>
+                    </Card>
                   )}
+                  
                   {selectedOrder.admin_notes && (
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <p className="text-sm font-medium text-green-800 mb-1">Admin Notu:</p>
-                      <p className="text-green-700">{selectedOrder.admin_notes}</p>
-                    </div>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">ADMİN NOTU</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm">{selectedOrder.admin_notes}</p>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
               )}
 
-              {/* Order Items */}
+              {/* Sipariş Ürünleri */}
               {selectedOrder.order_items && selectedOrder.order_items.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-3">Sipariş Ürünleri</h3>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <table className="min-w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ürün</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fiyat</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Adet</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Toplam</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {selectedOrder.order_items.map((item: any) => (
-                          <tr key={item.id}>
-                            <td className="px-4 py-3 text-sm text-gray-900">{item.product_name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900">{formatPrice(item.product_price)}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatPrice(item.total_price)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      SİPARİŞ EDİLEN ÜRÜNLER ({selectedOrder.order_items.length} ürün)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    
+                    {/* Desktop Tablo */}
+                    <div className="hidden md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead>Ürün</TableHead>
+                            <TableHead className="text-center w-20">Adet</TableHead>
+                            <TableHead className="text-right w-24">Birim Fiyat</TableHead>
+                            <TableHead className="text-right w-24">Toplam</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedOrder.order_items.map((item: OrderItem, index: number) => {
+                            const unitPrice = Number(item.unit_price) || 0
+                            const quantity = Number(item.quantity) || 0
+                            const total = unitPrice * quantity
+                            
+                            return (
+                              <TableRow key={index}>
+                                <TableCell>
+                                  <div className="font-medium">
+                                    {item.products?.name || item.product_name || 'Ürün Adı Bulunamadı'}
+                                  </div>
+                                  {item.product_id && (
+                                    <div className="text-xs text-muted-foreground">
+                                      ID: {item.product_id}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center font-medium">
+                                  {quantity}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {formatPrice(unitPrice)}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {formatPrice(total)}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile Kartlar */}
+                    <div className="md:hidden space-y-3 p-4">
+                      {selectedOrder.order_items.map((item: OrderItem, index: number) => {
+                        const unitPrice = Number(item.unit_price) || 0
+                        const quantity = Number(item.quantity) || 0
+                        const total = unitPrice * quantity
+                        
+                        return (
+                          <div key={index} className="border rounded-lg p-3 space-y-2">
+                            <div className="font-medium">
+                              {item.products?.name || item.product_name || 'Ürün Adı Bulunamadı'}
+                            </div>
+                            {item.product_id && (
+                              <div className="text-xs text-muted-foreground">
+                                ID: {item.product_id}
+                              </div>
+                            )}
+                            <div className="flex justify-between text-sm">
+                              <span>Adet: <span className="font-medium">{quantity}</span></span>
+                              <span>Birim: <span className="font-medium">{formatPrice(unitPrice)}</span></span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2 border-t">
+                              <span className="text-sm font-medium">Toplam:</span>
+                              <span className="font-bold text-primary">{formatPrice(total)}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Sipariş Özeti */}
+                    <div className="border-t bg-muted/20 p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Ara Toplam:</span>
+                        <span>{formatPrice(selectedOrder.subtotal || selectedOrder.total_amount)}</span>
+                      </div>
+                      {selectedOrder.subtotal && selectedOrder.subtotal !== selectedOrder.total_amount && (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span>KDV (%18):</span>
+                            <span>{formatPrice(selectedOrder.total_amount - selectedOrder.subtotal)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-base border-t pt-2">
+                            <span>Genel Toplam:</span>
+                            <span className="text-primary">{formatPrice(selectedOrder.total_amount)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Status Update Modal */}
-      {showStatusModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowStatusModal(false)}></div>
+      <Dialog open={showStatusModal} onOpenChange={setShowStatusModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sipariş Durumu Güncelle</DialogTitle>
+            <DialogDescription>
+              Siparişin durumunu değiştirin ve isteğe bağlı not ekleyin.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label>Yeni Durum</Label>
+              <Select value={statusUpdate.status} onValueChange={(value) => 
+                setStatusUpdate(prev => ({ ...prev, status: value }))
+              }>
+                <SelectTrigger>
+                  <SelectValue placeholder="Durum seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map((status) => (
+                    <SelectItem key={status.value} value={status.value}>
+                      {status.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             
-            <div className="relative bg-white rounded-lg max-w-md w-full p-6">
-              <h2 className="text-xl font-bold mb-4">Sipariş Durumu Güncelle</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Yeni Durum
-                  </label>
-                  <select
-                    value={statusUpdate.status}
-                    onChange={(e) => setStatusUpdate(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  >
-                    {statusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Admin Notu (Opsiyonel)
-                  </label>
-                  <textarea
-                    value={statusUpdate.notes}
-                    onChange={(e) => setStatusUpdate(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="Durum değişikliği hakkında not..."
-                  />
-                </div>
-
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleStatusUpdate}
-                    disabled={loading}
-                    className="flex-1 bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
-                  >
-                    {loading ? 'Güncelleniyor...' : 'Güncelle'}
-                  </button>
-                  <button
-                    onClick={() => setShowStatusModal(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
-                  >
-                    İptal
-                  </button>
-                </div>
-              </div>
+            <div>
+              <Label>Admin Notu (Opsiyonel)</Label>
+              <Textarea
+                value={statusUpdate.notes}
+                onChange={(e) => setStatusUpdate(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Durum değişikliği hakkında not..."
+                rows={3}
+              />
             </div>
           </div>
-        </div>
-      )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStatusModal(false)}>
+              İptal
+            </Button>
+            <Button onClick={handleStatusUpdate} disabled={loading}>
+              {loading ? 'Güncelleniyor...' : 'Güncelle'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

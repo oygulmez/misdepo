@@ -1,36 +1,41 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { CartProvider } from '@/context/CartContext'
 import { ToastProvider } from '@/context/ToastContext'
+import { Toaster } from '@/components/ui/toaster'
+import { Toaster as SonnerToaster } from 'sonner'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Temizlik & Ambalaj Ürünleri - Kaliteli Ürünler Uygun Fiyatlarla',
-  description: 'Temizlik malzemeleri, ambalaj ürünleri ve ev ihtiyaçlarınız için kaliteli ürünler. Hızlı teslimat, uygun fiyatlar. Şimdi sipariş verin!',
-  keywords: 'temizlik ürünleri, ambalaj malzemeleri, deterjan, sabun, plastik torbalar, temizlik malzemeleri',
-  authors: [{ name: 'Temizlik & Ambalaj E-Ticaret' }],
-  creator: 'Temizlik & Ambalaj E-Ticaret',
-  publisher: 'Temizlik & Ambalaj E-Ticaret',
+  title: 'Temizlik & Ambalaj - Kaliteli Ürünler, Uygun Fiyatlar',
+  description: 'Temizlik ürünleri ve ambalaj malzemeleri için en uygun fiyatlarla kaliteli ürünler. Hızlı teslimat, güvenli ödeme.',
+  keywords: 'temizlik ürünleri, ambalaj malzemeleri, deterjan, plastik torba, temizlik malzemeleri, online alışveriş',
+  authors: [{ name: 'Temizlik & Ambalaj' }],
+  creator: 'Temizlik & Ambalaj',
+  publisher: 'Temizlik & Ambalaj',
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
-  metadataBase: new URL('https://localhost:3000'), // Production'da değiştirilecek
+  metadataBase: new URL('https://yourdomain.com'), // Replace with your actual domain
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'Temizlik & Ambalaj Ürünleri - Kaliteli Ürünler Uygun Fiyatlarla',
-    description: 'Temizlik malzemeleri, ambalaj ürünleri ve ev ihtiyaçlarınız için kaliteli ürünler. Hızlı teslimat, uygun fiyatlar.',
-    url: 'https://localhost:3000',
-    siteName: 'Temizlik & Ambalaj E-Ticaret',
-    locale: 'tr_TR',
     type: 'website',
+    locale: 'tr_TR',
+    url: 'https://yourdomain.com',
+    title: 'Temizlik & Ambalaj - Kaliteli Ürünler',
+    description: 'Temizlik ürünleri ve ambalaj malzemeleri için en uygun fiyatlarla kaliteli ürünler.',
+    siteName: 'Temizlik & Ambalaj',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Temizlik & Ambalaj Ürünleri',
-    description: 'Kaliteli temizlik ve ambalaj ürünleri uygun fiyatlarla.',
+    title: 'Temizlik & Ambalaj - Kaliteli Ürünler',
+    description: 'Temizlik ürünleri ve ambalaj malzemeleri için en uygun fiyatlarla kaliteli ürünler.',
   },
   robots: {
     index: true,
@@ -51,13 +56,21 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="tr" className="scroll-smooth">
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
-        <ToastProvider>
-          <CartProvider>
+    <html lang="tr">
+      <head>
+        <link rel="icon" href="/favicon.ico" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#1d4ed8" />
+        <link rel="canonical" href="https://yourdomain.com" />
+      </head>
+      <body className={inter.className}>
+        <CartProvider>
+          <ToastProvider>
             {children}
-          </CartProvider>
-        </ToastProvider>
+            <Toaster />
+            <SonnerToaster position="top-right" richColors />
+          </ToastProvider>
+        </CartProvider>
       </body>
     </html>
   )

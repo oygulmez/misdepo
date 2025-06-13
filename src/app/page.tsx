@@ -1,244 +1,384 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { categoriesApi, productsApi } from '@/lib/database'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useCart } from '@/context/CartContext'
-import { useToast } from '@/context/ToastContext'
-import { LoadingCard } from '@/components/LoadingSpinner'
+import { productsApi, categoriesApi } from '@/lib/database'
+import { Product, Category } from '@/lib/database.types'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ShoppingCart, Search, Star, Package, Truck, Shield, Clock } from 'lucide-react'
+
+function createSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim()
+    .substring(0, 100)
+}
+
+function getProductUrl(product: Product): string {
+  const slug = createSlug(product.name)
+  return `/urun/${slug}`
+}
 
 export default function HomePage() {
-  const [categories, setCategories] = useState<any[]>([])
-  const [featuredProducts, setFeaturedProducts] = useState<any[]>([])
+  const { addToCart, formatPrice } = useCart()
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
-  
-  // Cart hooks
-  const { cart, addToCart, formatPrice } = useCart()
-  const { success } = useToast()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        // Load categories
-        const categoriesData = await categoriesApi.getAll()
-        setCategories(categoriesData)
-
-        // Load products
-        const productsData = await productsApi.getAll({
-          is_active: true,
-          limit: 4
-        })
-        setFeaturedProducts(productsData)
-
-      } catch (error) {
-        console.error('Data loading error:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadData()
+    Promise.all([
+      productsApi.getAll({ is_active: true }),
+      categoriesApi.getAll()
+    ]).then(([productsData, categoriesData]) => {
+      setProducts(productsData)
+      setCategories(categoriesData.filter(cat => cat.is_active))
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
+
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesCategory = selectedCategory === 'all' || product.category_id === selectedCategory
+    return matchesSearch && matchesCategory
+  })
+
+  const featuredProducts = products.filter(p => p.is_featured)
+  const campaignProducts = products.filter(p => p.is_campaign)
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Yükleniyor...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="container-mobile sm:container-tablet lg:container-desktop py-4">
+      <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-primary-600">
-                Temizlik & Ambalaj
-              </h1>
-            </div>
+            <Link href="/" className="text-2xl font-bold text-primary">
+              Temizlik & Ambalaj
+            </Link>
             
-            {/* Mobile Menu & Cart */}
-            <div className="flex items-center space-x-4">
-              <a href="/cart" className="p-2 hover:bg-gray-100 rounded-lg relative">
-                <span className="text-xl">🛒</span>
-                {cart.totalItems > 0 && (
-                  <span className="absolute -top-1 -right-1 text-xs bg-primary-500 text-white rounded-full px-2 py-1 min-w-[20px] text-center">
-                    {cart.totalItems}
-                  </span>
-                )}
-              </a>
+            <div className="flex-1 max-w-md mx-8">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Ürün ara..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Link href="/cart">
+                <Button variant="outline" size="sm">
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Sepet
+                </Button>
+              </Link>
+              <Link href="/admin">
+                <Button variant="ghost" size="sm">
+                  Admin
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Ana İçerik */}
-      <main>
-        {/* Hero Section */}
-        <section className="bg-gradient-to-r from-primary-600 to-primary-700 text-white py-12">
-          <div className="container-mobile sm:container-tablet lg:container-desktop text-center">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4">
-              Kaliteli Temizlik ve Ambalaj Ürünleri
-            </h2>
-            <p className="text-lg sm:text-xl mb-6 opacity-90">
-              Eviniz ve işiniz için ihtiyacınız olan her şey burada!
-            </p>
-            <button className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
-              Ürünleri İncele
-            </button>
+      {/* Hero Section */}
+      <section className="py-20 bg-gradient-to-br from-primary/10 via-background to-secondary/10">
+        <div className="container mx-auto px-4 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
+            Kaliteli Temizlik &<br />
+            <span className="text-primary">Ambalaj Ürünleri</span>
+          </h1>
+          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+            En uygun fiyatlarla kaliteli ürünler. Hızlı teslimat, güvenli ödeme seçenekleri.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Button size="lg" asChild>
+              <Link href="#products">Ürünleri İncele</Link>
+            </Button>
+            <Button variant="outline" size="lg" asChild>
+              <Link href="/contact">İletişim</Link>
+            </Button>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Kategoriler */}
-        <section className="py-12">
-          <div className="container-mobile sm:container-tablet lg:container-desktop">
-            <h3 className="text-2xl font-bold mb-8 text-center">Ürün Kategorileri</h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {categories.map((category, index) => {
-                const icons = ['🧽', '📦', '🏠']
-                const gradients = [
-                  'from-blue-100 to-blue-200',
-                  'from-green-100 to-green-200', 
-                  'from-purple-100 to-purple-200'
-                ]
-                
-                return (
-                  <div key={category.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                    <div className={`h-48 bg-gradient-to-br ${gradients[index]} flex items-center justify-center`}>
-                      <span className="text-4xl">{icons[index]}</span>
-                    </div>
-                    <div className="p-6">
-                      <h4 className="text-xl font-semibold mb-2">{category.name}</h4>
-                      <p className="text-gray-600 mb-4">{category.description}</p>
-                      <button className="w-full bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition-colors">
-                        İncele
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+      {/* Features */}
+      <section className="py-16 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Truck className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold mb-2">Hızlı Teslimat</h3>
+              <p className="text-sm text-muted-foreground">Aynı gün kargo</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold mb-2">Güvenli Ödeme</h3>
+              <p className="text-sm text-muted-foreground">SSL korumalı</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Package className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold mb-2">Kaliteli Ürünler</h3>
+              <p className="text-sm text-muted-foreground">Orijinal markalar</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <Clock className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold mb-2">7/24 Destek</h3>
+              <p className="text-sm text-muted-foreground">Müşteri hizmetleri</p>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Öne Çıkan Ürünler */}
-        <section className="py-12 bg-gray-100">
-          <div className="container-mobile sm:container-tablet lg:container-desktop">
-            <h3 className="text-2xl font-bold mb-8 text-center">
-              {featuredProducts.length > 0 ? 'Öne Çıkan Ürünler' : 'Ürünlerimiz'}
-            </h3>
-            
-            {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[1, 2, 3, 4].map((i) => (
-                  <LoadingCard key={i} />
-                ))}
-              </div>
-            ) : featuredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {featuredProducts.map((product) => (
-                  <div key={product.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                    <a href={`/product/${product.id}`} className="block">
-                      <div className="h-40 bg-gradient-to-br from-yellow-100 to-yellow-200 flex items-center justify-center hover:scale-105 transition-transform">
-                        <span className="text-3xl">🧴</span>
-                      </div>
-                    </a>
-                    <div className="p-4">
-                      <a href={`/product/${product.id}`}>
-                        <h5 className="font-semibold mb-2 hover:text-primary-600 transition-colors">{product.name}</h5>
-                      </a>
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
-                      <div className="flex items-center space-x-2 mb-3">
-                        {product.campaign_price ? (
-                          <>
-                            <span className="text-lg font-bold text-primary-600">₺{product.campaign_price}</span>
-                            <span className="text-sm text-gray-500 line-through">₺{product.price}</span>
-                          </>
-                        ) : (
-                          <span className="text-lg font-bold text-primary-600">₺{product.price}</span>
-                        )}
-                      </div>
-                      <button 
-                        onClick={(event) => {
-                          addToCart(product)
-                          success('Sepete Eklendi!', `${product.name} sepetinize eklendi`)
-                          
-                          // Simple animation feedback
-                          const button = event?.target as HTMLButtonElement
-                          if (button) {
-                            button.textContent = '✓ Eklendi!'
-                            button.classList.add('bg-green-600', 'hover:bg-green-700')
-                            button.classList.remove('bg-secondary-600', 'hover:bg-secondary-700')
-                            setTimeout(() => {
-                              button.textContent = 'Sepete Ekle'
-                              button.classList.remove('bg-green-600', 'hover:bg-green-700')
-                              button.classList.add('bg-secondary-600', 'hover:bg-secondary-700')
-                            }, 1500)
-                          }
-                        }}
-                        className="w-full bg-secondary-600 text-white py-2 rounded-lg hover:bg-secondary-700 transition-all duration-300 transform hover:scale-105 active:scale-95"
-                      >
-                        Sepete Ekle
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-500 mb-4">Henüz ürün eklenmemiş.</p>
-                <a 
-                  href="/test-db" 
-                  className="inline-block bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors"
+      {/* Products Section */}
+      <section id="products" className="py-16">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">Ürünlerimiz</h2>
+          
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-4 mb-8">
+              <TabsTrigger 
+                value="all" 
+                onClick={() => setSelectedCategory('all')}
+              >
+                Tümü
+              </TabsTrigger>
+              {categories.slice(0, 3).map(category => (
+                <TabsTrigger 
+                  key={category.id} 
+                  value={category.id}
+                  onClick={() => setSelectedCategory(category.id)}
                 >
-                  Database Test Et
-                </a>
+                  {category.name.length > 8 ? category.name.substring(0, 8) + '...' : category.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <TabsContent value="all" className="space-y-8">
+              {/* Featured Products */}
+              {featuredProducts.length > 0 && (
+                <div>
+                  <h3 className="text-2xl font-semibold mb-6 flex items-center">
+                    <Star className="h-5 w-5 mr-2 text-yellow-500" />
+                    Öne Çıkan Ürünler
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {featuredProducts.slice(0, 4).map(product => (
+                      <ProductCard key={product.id} product={product} addToCart={addToCart} formatPrice={formatPrice} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Campaign Products */}
+              {campaignProducts.length > 0 && (
+                <div>
+                  <h3 className="text-2xl font-semibold mb-6 text-red-600">🔥 Kampanyalı Ürünler</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {campaignProducts.slice(0, 4).map(product => (
+                      <ProductCard key={product.id} product={product} addToCart={addToCart} formatPrice={formatPrice} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* All Products */}
+              <div>
+                <h3 className="text-2xl font-semibold mb-6">Tüm Ürünler</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {filteredProducts.map(product => (
+                    <ProductCard key={product.id} product={product} addToCart={addToCart} formatPrice={formatPrice} />
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
-        </section>
-      </main>
+            </TabsContent>
+
+            {categories.map(category => (
+              <TabsContent key={category.id} value={category.id}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {filteredProducts.filter(p => p.category_id === category.id).map(product => (
+                    <ProductCard key={product.id} product={product} addToCart={addToCart} formatPrice={formatPrice} />
+                  ))}
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8">
-        <div className="container-mobile sm:container-tablet lg:container-desktop">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <footer className="bg-muted py-12 mt-16">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h4 className="text-lg font-semibold mb-4">İletişim</h4>
-              <p className="text-gray-300">📞 0555 123 45 67</p>
-              <p className="text-gray-300">📧 info@temizlikambalaj.com</p>
-              <p className="text-gray-300">📍 İstanbul, Türkiye</p>
+              <h3 className="font-semibold text-lg mb-4">Temizlik & Ambalaj</h3>
+              <p className="text-muted-foreground text-sm">
+                Kaliteli temizlik ürünleri ve ambalaj malzemeleri için güvenilir adresiniz.
+              </p>
             </div>
-            
             <div>
-              <h4 className="text-lg font-semibold mb-4">Hızlı Menü</h4>
-              <ul className="space-y-2 text-gray-300">
-                <li><a href="#" className="hover:text-white">Ana Sayfa</a></li>
-                <li><a href="#" className="hover:text-white">Ürünler</a></li>
-                <li><a href="/test-db" className="hover:text-white">Test</a></li>
+              <h4 className="font-semibold mb-4">Hızlı Linkler</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/" className="text-muted-foreground hover:text-foreground">Ana Sayfa</Link></li>
+                <li><Link href="/products" className="text-muted-foreground hover:text-foreground">Ürünler</Link></li>
+                <li><Link href="/about" className="text-muted-foreground hover:text-foreground">Hakkımızda</Link></li>
+                <li><Link href="/contact" className="text-muted-foreground hover:text-foreground">İletişim</Link></li>
               </ul>
             </div>
-            
             <div>
-              <h4 className="text-lg font-semibold mb-4">Ödeme Yöntemleri</h4>
-              <p className="text-gray-300">• Kapıda Ödeme</p>
-              <p className="text-gray-300">• Havale/EFT</p>
-              <p className="text-gray-300">• Kredi Kartı</p>
+              <h4 className="font-semibold mb-4">Kategoriler</h4>
+              <ul className="space-y-2 text-sm">
+                {categories.slice(0, 4).map(category => (
+                  <li key={category.id}>
+                    <Link href={`/category/${category.id}`} className="text-muted-foreground hover:text-foreground">
+                      {category.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">İletişim</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>📞 0555 123 45 67</li>
+                <li>✉️ info@temizlikambalaj.com</li>
+                <li>📍 İstanbul, Türkiye</li>
+              </ul>
             </div>
           </div>
-          
-          <div className="border-t border-gray-700 mt-8 pt-6 text-center text-gray-400">
-            <p>&copy; 2024 Temizlik & Ambalaj E-Ticaret. Tüm hakları saklıdır.</p>
+          <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
+            © 2024 Temizlik & Ambalaj. Tüm hakları saklıdır.
           </div>
         </div>
       </footer>
     </div>
+  )
+}
+
+function ProductCard({ 
+  product, 
+  addToCart, 
+  formatPrice 
+}: { 
+  product: Product
+  addToCart: (product: Product) => void
+  formatPrice: (amount: number) => string
+}) {
+  const currentPrice = product.is_campaign && product.campaign_price 
+    ? product.campaign_price 
+    : product.price
+
+  const originalPrice = product.is_campaign && product.campaign_price 
+    ? product.price 
+    : null
+
+  return (
+    <Card className="group hover:shadow-lg transition-shadow duration-200">
+      <CardHeader className="p-4">
+        <div className="aspect-square bg-muted rounded-lg mb-4 flex items-center justify-center">
+          {product.image_urls && product.image_urls.length > 0 ? (
+            <img 
+              src={product.image_urls[0]} 
+              alt={product.name}
+              className="w-full h-full object-cover rounded-lg"
+            />
+          ) : (
+            <Package className="h-12 w-12 text-muted-foreground" />
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          {product.is_campaign && (
+            <Badge variant="destructive" className="text-xs">
+              Kampanya
+            </Badge>
+          )}
+          {product.is_featured && (
+            <Badge variant="secondary" className="text-xs">
+              Öne Çıkan
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      
+      <CardContent className="p-4 pt-0">
+        <CardTitle className="text-lg mb-2 group-hover:text-primary transition-colors">
+          <Link href={getProductUrl(product)}>
+            {product.name}
+          </Link>
+        </CardTitle>
+        
+        {product.description && (
+          <CardDescription className="text-sm mb-4">
+            {product.description.length > 100 
+              ? product.description.substring(0, 100) + '...' 
+              : product.description}
+          </CardDescription>
+        )}
+        
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="text-2xl font-bold text-primary">
+              {formatPrice(currentPrice)}
+            </div>
+            {originalPrice && (
+              <div className="text-sm text-muted-foreground line-through">
+                {formatPrice(originalPrice)}
+              </div>
+            )}
+          </div>
+          
+          <Badge variant="outline" className="text-xs">
+            Stok: {product.stock_quantity}
+          </Badge>
+        </div>
+      </CardContent>
+      
+      <CardFooter className="p-4 pt-0">
+        <Button 
+          className="w-full" 
+          onClick={() => addToCart(product)}
+          disabled={product.stock_quantity === 0}
+        >
+          <ShoppingCart className="h-4 w-4 mr-2" />
+          {product.stock_quantity === 0 ? 'Stokta Yok' : 'Sepete Ekle'}
+        </Button>
+      </CardFooter>
+    </Card>
   )
 } 

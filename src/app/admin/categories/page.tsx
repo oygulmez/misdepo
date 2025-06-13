@@ -1,13 +1,36 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { categoriesApi } from '@/lib/database'
 import { Category } from '@/lib/database.types'
+import { useToast } from '@/context/ToastContext'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Switch } from '@/components/ui/switch'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { 
+  Tag,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  Search,
+  ShoppingCart,
+  Package
+} from 'lucide-react'
 
 interface CategoryForm {
   name: string
   description: string
-  parent_id: string | null
   is_active: boolean
 }
 
@@ -16,11 +39,13 @@ export default function AdminCategoriesPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const { success, error: showError } = useToast()
   
   const [form, setForm] = useState<CategoryForm>({
     name: '',
     description: '',
-    parent_id: null,
     is_active: true
   })
   
@@ -36,6 +61,7 @@ export default function AdminCategoriesPage() {
       setCategories(data)
     } catch (error) {
       console.error('Categories loading error:', error)
+      showError('Hata', 'Kategoriler yüklenirken hata oluştu')
     } finally {
       setLoading(false)
     }
@@ -45,7 +71,6 @@ export default function AdminCategoriesPage() {
     setForm({
       name: '',
       description: '',
-      parent_id: null,
       is_active: true
     })
     setErrors({})
@@ -56,7 +81,6 @@ export default function AdminCategoriesPage() {
     setForm({
       name: category.name,
       description: category.description || '',
-      parent_id: category.parent_id,
       is_active: category.is_active
     })
     setEditingCategory(category)
@@ -84,51 +108,37 @@ export default function AdminCategoriesPage() {
     setLoading(true)
     
     try {
-      const categoryData = {
-        ...form,
-        parent_id: form.parent_id || null
-      }
-      
       if (editingCategory) {
-        await categoriesApi.update(editingCategory.id, categoryData)
+        await categoriesApi.update(editingCategory.id, form)
+        success('Başarılı!', 'Kategori başarıyla güncellendi!')
       } else {
-        await categoriesApi.create(categoryData)
+        await categoriesApi.create(form)
+        success('Başarılı!', 'Kategori başarıyla eklendi!')
       }
       
       await loadCategories()
       setShowModal(false)
       resetForm()
-      
-      alert(editingCategory ? 'Kategori başarıyla güncellendi!' : 'Kategori başarıyla eklendi!')
     } catch (error) {
       console.error('Category save error:', error)
-      alert('Kategori kaydedilirken hata oluştu.')
+      showError('Hata!', 'Kategori kaydedilirken hata oluştu.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async (id: string) => {
-    // Check if category has subcategories or products
-    const hasSubcategories = categories.some(cat => cat.parent_id === id)
-    
-    if (hasSubcategories) {
-      alert('Bu kategorinin alt kategorileri var. Önce alt kategorileri silin.')
-      return
-    }
-    
-    if (!confirm('Bu kategoriyi silmek istediğinizden emin misiniz?')) {
-      return
-    }
+  const handleDelete = async () => {
+    if (!deleteConfirm) return
     
     try {
       setLoading(true)
-      await categoriesApi.delete(id)
+      await categoriesApi.delete(deleteConfirm)
       await loadCategories()
-      alert('Kategori başarıyla silindi!')
+      success('Başarılı!', 'Kategori başarıyla silindi!')
+      setDeleteConfirm(null)
     } catch (error) {
       console.error('Category delete error:', error)
-      alert('Kategori silinirken hata oluştu. Önce bu kategoriye ait ürünleri silin.')
+      showError('Hata!', 'Kategori silinirken hata oluştu.')
     } finally {
       setLoading(false)
     }
@@ -138,304 +148,268 @@ export default function AdminCategoriesPage() {
     try {
       await categoriesApi.update(category.id, { is_active: !category.is_active })
       await loadCategories()
+      success('Başarılı!', 'Kategori durumu güncellendi!')
     } catch (error) {
       console.error('Toggle active error:', error)
-      alert('Kategori durumu güncellenirken hata oluştu.')
+      showError('Hata!', 'Kategori durumu güncellenirken hata oluştu.')
     }
   }
 
-  // Get parent category name
-  const getParentName = (parentId: string | null) => {
-    if (!parentId) return 'Ana Kategori'
-    const parent = categories.find(cat => cat.id === parentId)
-    return parent ? parent.name : 'Bilinmeyen'
+  // Filter categories based on search
+  const filteredCategories = categories.filter(category =>
+    category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    category.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const getCategoryStats = () => {
+    return {
+      total: categories.length,
+      active: categories.filter(c => c.is_active).length,
+      inactive: categories.filter(c => !c.is_active).length
+    }
   }
 
-  // Get root categories (for parent selection)
-  const getRootCategories = () => {
-    return categories.filter(cat => !cat.parent_id)
-  }
-
-  // Get category hierarchy level
-  const getCategoryLevel = (category: Category) => {
-    return category.parent_id ? 1 : 0
-  }
-
-  // Sort categories: root first, then children
-  const sortedCategories = [...categories].sort((a, b) => {
-    const aLevel = getCategoryLevel(a)
-    const bLevel = getCategoryLevel(b)
-    
-    if (aLevel !== bLevel) {
-      return aLevel - bLevel
-    }
-    
-    if (aLevel === 0) {
-      return a.name.localeCompare(b.name, 'tr')
-    }
-    
-    // For subcategories, group by parent
-    const aParent = getParentName(a.parent_id)
-    const bParent = getParentName(b.parent_id)
-    
-    if (aParent !== bParent) {
-      return aParent.localeCompare(bParent, 'tr')
-    }
-    
-    return a.name.localeCompare(b.name, 'tr')
-  })
+  const stats = getCategoryStats()
 
   if (loading && categories.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Kategoriler yükleniyor...</p>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Kategori Yönetimi</h1>
-          <p className="text-gray-600 mt-2">
-            Toplam {categories.length} kategori
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            resetForm()
-            setShowModal(true)
-          }}
-          className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
-        >
-          + Yeni Kategori
-        </button>
-      </div>
+    <div className="px-4 sm:px-6 lg:px-8 py-8">
+      <div className="space-y-8">
+        
+        {/* Toolbar */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-lg font-semibold">Kategori Yönetimi</h3>
+                <p className="text-sm text-muted-foreground">Toplam {categories.length} kategori</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Kategori ara..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button onClick={() => setShowModal(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Yeni Kategori
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Categories Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {categories.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Kategori
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Açıklama
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Üst Kategori
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Durum
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    İşlemler
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {sortedCategories.map((category) => (
-                  <tr key={category.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mr-3 ${
-                          category.parent_id 
-                            ? 'bg-gray-100 text-gray-600 ml-6' 
-                            : 'bg-primary-100 text-primary-600'
-                        }`}>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Tag className="h-8 w-8 text-blue-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Toplam Kategori</p>
+                  <p className="text-2xl font-bold">{stats.total}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Eye className="h-8 w-8 text-green-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Aktif</p>
+                  <p className="text-2xl font-bold">{stats.active}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <EyeOff className="h-8 w-8 text-red-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-muted-foreground">Pasif</p>
+                  <p className="text-2xl font-bold">{stats.inactive}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Categories Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Tag className="h-5 w-5 mr-2" />
+              Kategori Listesi
+            </CardTitle>
+            <CardDescription>
+              {filteredCategories.length} kategori listeleniyor
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {filteredCategories.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Kategori Adı</TableHead>
+                    <TableHead>Açıklama</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead>İşlemler</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCategories.map((category) => (
+                    <TableRow key={category.id}>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center mr-3">
+                            <Tag className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <div className="font-medium">{category.name}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-muted-foreground">
+                          {category.description?.substring(0, 100)}
+                          {category.description && category.description.length > 100 && '...'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={category.is_active}
+                            onCheckedChange={(checked: boolean) => toggleActive(category)}
+                          />
                           <span className="text-sm">
-                            {category.parent_id ? '📁' : '🗂️'}
+                            {category.is_active ? 'Aktif' : 'Pasif'}
                           </span>
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {category.parent_id && '↳ '}{category.name}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            ID: {category.id.slice(0, 8)}
-                          </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(category)}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setDeleteConfirm(category.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 max-w-xs truncate">
-                        {category.description}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {getParentName(category.parent_id)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        category.is_active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {category.is_active ? 'Aktif' : 'Pasif'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEdit(category)}
-                          className="text-primary-600 hover:text-primary-800 font-medium"
-                        >
-                          Düzenle
-                        </button>
-                        <button
-                          onClick={() => toggleActive(category)}
-                          className="text-gray-600 hover:text-gray-800 font-medium"
-                        >
-                          {category.is_active ? 'Pasifleştir' : 'Aktifleştir'}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(category.id)}
-                          className="text-red-600 hover:text-red-800 font-medium"
-                        >
-                          Sil
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-12 text-gray-500">
-            Henüz kategori eklenmemiş.
-          </div>
-        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8">
+                <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">
+                  {searchQuery ? 'Arama kriterlerine uygun kategori bulunamadı' : 'Henüz kategori eklenmemiş'}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Category Form Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowModal(false)}></div>
-            
-            <div className="relative bg-white rounded-lg max-w-md w-full p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold">
-                  {editingCategory ? 'Kategori Düzenle' : 'Yeni Kategori Ekle'}
-                </h2>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <span className="text-2xl">✕</span>
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Category Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Kategori Adı *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      errors.name ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Kategori adını girin"
-                  />
-                  {errors.name && (
-                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
-                  )}
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Açıklama *
-                  </label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                      errors.description ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Kategori açıklamasını girin"
-                  />
-                  {errors.description && (
-                    <p className="text-red-500 text-sm mt-1">{errors.description}</p>
-                  )}
-                </div>
-
-                {/* Parent Category */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Üst Kategori
-                  </label>
-                  <select
-                    value={form.parent_id || ''}
-                    onChange={(e) => setForm(prev => ({ ...prev, parent_id: e.target.value || null }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  >
-                    <option value="">Ana Kategori</option>
-                    {getRootCategories()
-                      .filter(cat => !editingCategory || cat.id !== editingCategory.id)
-                      .map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Boş bırakırsanız ana kategori olarak oluşturulur
-                  </p>
-                </div>
-
-                {/* Active Checkbox */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="is_active"
-                    checked={form.is_active}
-                    onChange={(e) => setForm(prev => ({ ...prev, is_active: e.target.checked }))}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="is_active" className="ml-2 text-sm text-gray-700">
-                    Aktif kategori
-                  </label>
-                </div>
-
-                {/* Submit Buttons */}
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
-                  >
-                    {loading ? 'Kaydediliyor...' : (editingCategory ? 'Güncelle' : 'Ekle')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
-                  >
-                    İptal
-                  </button>
-                </div>
-              </form>
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Tag className="h-5 w-5 mr-2" />
+              {editingCategory ? 'Kategoriyi Düzenle' : 'Yeni Kategori Ekle'}
+            </DialogTitle>
+            <DialogDescription>
+              Kategori bilgilerini doldurun ve kaydedin.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="name">Kategori Adı *</Label>
+              <Input
+                id="name"
+                value={form.name}
+                onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Kategori adı"
+              />
+              {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
             </div>
-          </div>
-        </div>
-      )}
+            
+            <div>
+              <Label htmlFor="description">Açıklama *</Label>
+              <Textarea
+                id="description"
+                value={form.description}
+                onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Kategori açıklaması"
+                rows={3}
+              />
+              {errors.description && <p className="text-sm text-destructive">{errors.description}</p>}
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="is_active"
+                checked={form.is_active}
+                onCheckedChange={(checked: boolean) => setForm(prev => ({ ...prev, is_active: checked }))}
+              />
+              <Label htmlFor="is_active">Aktif</Label>
+            </div>
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+                İptal
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Kaydediliyor...' : (editingCategory ? 'Güncelle' : 'Ekle')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kategoriyi Sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu kategoriyi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 } 

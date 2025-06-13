@@ -6,7 +6,19 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/context/ToastContext'
 import Link from 'next/link'
 import { customersApi, ordersApi } from '@/lib/database'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { InsertOrderItem } from '@/lib/database.types'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { ArrowLeft, CreditCard, Truck, ShoppingCart, Package } from 'lucide-react'
+
+// Order item without order_id (will be added by ordersApi.create)
+type OrderItemWithoutOrderId = Omit<InsertOrderItem, 'order_id'>
 
 interface OrderForm {
   customerName: string
@@ -35,24 +47,24 @@ export default function CheckoutPage() {
   // Redirect if cart is empty
   if (cart.totalItems === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
-        <div className="container-mobile sm:container-tablet lg:container-desktop">
-          <div className="text-center py-16">
-            <div className="text-6xl mb-6">📦</div>
-            <h1 className="text-3xl font-bold mb-4 text-gray-900">
-              Sepetiniz Boş
-            </h1>
-            <p className="text-gray-600 mb-8">
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="text-6xl mb-4">📦</div>
+            <CardTitle className="text-2xl">Sepetiniz Boş</CardTitle>
+            <CardDescription>
               Sipariş verebilmek için önce sepetinize ürün eklemelisiniz.
-            </p>
-            <Link 
-              href="/"
-              className="inline-block bg-primary-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors"
-            >
-              Alışverişe Başla
-            </Link>
-          </div>
-        </div>
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button asChild className="w-full">
+              <Link href="/">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Alışverişe Başla
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     )
   }
@@ -89,41 +101,57 @@ export default function CheckoutPage() {
           name: form.customerName,
           phone: form.customerPhone,
           address: form.customerAddress
-        })
+        } as any)
       }
       
       // Create order
+      const orderItems: OrderItemWithoutOrderId[] = cart.items.map(item => ({
+        product_id: item.product.id,
+        product_name: item.product.name,
+        product_price: item.product.is_campaign && item.product.campaign_price
+          ? item.product.campaign_price
+          : item.product.price,
+        quantity: item.quantity,
+        total_price: (item.product.is_campaign && item.product.campaign_price
+          ? item.product.campaign_price
+          : item.product.price) * item.quantity
+      }))
+
+      // Mevcut schema ile uyumlu order objesi
+      const orderData = {
+        customer_name: form.customerName,
+        customer_phone: form.customerPhone,
+        customer_address: form.customerAddress,
+        payment_method: form.paymentMethod,
+        total_amount: cart.totalAmount,
+        notes: form.notes || null
+      }
+
       const order = await ordersApi.create(
-        {
-          customer_id: customer.id,
-          customer_name: form.customerName,
-          customer_phone: form.customerPhone,
-          customer_address: form.customerAddress,
-          payment_method: form.paymentMethod,
-          total_amount: cart.totalAmount,
-          subtotal: cart.totalAmount,
-          notes: form.notes || null
-        },
-        cart.items.map(item => ({
-          product_id: item.product.id,
-          product_name: item.product.name,
-          product_price: item.product.is_campaign && item.product.campaign_price
-            ? item.product.campaign_price
-            : item.product.price,
-          quantity: item.quantity,
-          total_price: (item.product.is_campaign && item.product.campaign_price
-            ? item.product.campaign_price
-            : item.product.price) * item.quantity
-        }))
+        orderData as any,
+        orderItems as any
       )
       
       // Clear cart and redirect
       clearCart()
       router.push(`/order-success?id=${order.id}`)
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Order creation error:', error)
-      showError('Sipariş Hatası', 'Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.')
+      console.error('Error details:', JSON.stringify(error, null, 2))
+      
+      // Get detailed error message
+      let errorMessage = 'Sipariş oluşturulurken bir hata oluştu.'
+      
+      if (error?.message) {
+        errorMessage = error.message
+      } else if (error?.details) {
+        errorMessage = error.details
+      } else if (error?.hint) {
+        errorMessage = error.hint
+      }
+      
+      showError('Sipariş Hatası', errorMessage)
     } finally {
       setLoading(false)
     }
@@ -137,213 +165,221 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="container-mobile sm:container-tablet lg:container-desktop py-4">
+      <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-xl font-bold text-primary-600">
+            <Link href="/" className="text-xl font-bold text-primary">
               Temizlik & Ambalaj
             </Link>
             <h1 className="text-lg font-semibold">Sipariş Ver</h1>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/cart">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Sepete Dön
+              </Link>
+            </Button>
           </div>
         </div>
       </header>
 
-      <div className="py-8">
-        <div className="container-mobile sm:container-tablet lg:container-desktop">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Order Form */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-semibold mb-6">Sipariş Bilgileri</h2>
-                
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Order Form */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Sipariş Bilgileri
+                </CardTitle>
+                <CardDescription>
+                  Siparişinizi tamamlamak için aşağıdaki bilgileri doldurun.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Customer Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ad Soyad *
-                    </label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="customerName">Ad Soyad *</Label>
+                    <Input
+                      id="customerName"
                       type="text"
                       value={form.customerName}
                       onChange={(e) => handleInputChange('customerName', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                        errors.customerName ? 'border-red-500' : 'border-gray-300'
-                      }`}
                       placeholder="Adınızı ve soyadınızı girin"
+                      className={errors.customerName ? 'border-destructive' : ''}
                     />
                     {errors.customerName && (
-                      <p className="text-red-500 text-sm mt-1">{errors.customerName}</p>
+                      <p className="text-sm text-destructive">{errors.customerName}</p>
                     )}
                   </div>
 
                   {/* Customer Phone */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Telefon Numarası *
-                    </label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="customerPhone">Telefon Numarası *</Label>
+                    <Input
+                      id="customerPhone"
                       type="tel"
                       value={form.customerPhone}
                       onChange={(e) => handleInputChange('customerPhone', e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                        errors.customerPhone ? 'border-red-500' : 'border-gray-300'
-                      }`}
                       placeholder="0555 123 45 67"
+                      className={errors.customerPhone ? 'border-destructive' : ''}
                     />
                     {errors.customerPhone && (
-                      <p className="text-red-500 text-sm mt-1">{errors.customerPhone}</p>
+                      <p className="text-sm text-destructive">{errors.customerPhone}</p>
                     )}
                   </div>
 
                   {/* Customer Address */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Teslimat Adresi *
-                    </label>
-                    <textarea
+                  <div className="space-y-2">
+                    <Label htmlFor="customerAddress">Teslimat Adresi *</Label>
+                    <Textarea
+                      id="customerAddress"
                       value={form.customerAddress}
                       onChange={(e) => handleInputChange('customerAddress', e.target.value)}
-                      rows={4}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                        errors.customerAddress ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="Mahalle, Sokak, Kapı No, İlçe, İl..."
+                      placeholder="Tam adresinizi yazın..."
+                      rows={3}
+                      className={errors.customerAddress ? 'border-destructive' : ''}
                     />
                     {errors.customerAddress && (
-                      <p className="text-red-500 text-sm mt-1">{errors.customerAddress}</p>
+                      <p className="text-sm text-destructive">{errors.customerAddress}</p>
                     )}
                   </div>
 
                   {/* Payment Method */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Ödeme Yöntemi *
-                    </label>
-                    <div className="space-y-3">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="cash_on_delivery"
-                          checked={form.paymentMethod === 'cash_on_delivery'}
-                          onChange={(e) => handleInputChange('paymentMethod', e.target.value as any)}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="ml-3">💵 Kapıda Ödeme</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="bank_transfer"
-                          checked={form.paymentMethod === 'bank_transfer'}
-                          onChange={(e) => handleInputChange('paymentMethod', e.target.value as any)}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="ml-3">🏦 Havale/EFT</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="credit_card"
-                          checked={form.paymentMethod === 'credit_card'}
-                          onChange={(e) => handleInputChange('paymentMethod', e.target.value as any)}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="ml-3">💳 Kredi Kartı</span>
-                      </label>
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Ödeme Yöntemi</Label>
+                    <Select 
+                      value={form.paymentMethod} 
+                      onValueChange={(value: 'cash_on_delivery' | 'bank_transfer' | 'credit_card') => 
+                        handleInputChange('paymentMethod', value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Ödeme yöntemini seçin" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash_on_delivery">
+                          <div className="flex items-center">
+                            <Truck className="h-4 w-4 mr-2" />
+                            Kapıda Ödeme
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="bank_transfer">
+                          <div className="flex items-center">
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Havale/EFT
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="credit_card">
+                          <div className="flex items-center">
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Kredi Kartı
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Order Notes */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Sipariş Notu (Opsiyonel)
-                    </label>
-                    <textarea
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Sipariş Notları (Opsiyonel)</Label>
+                    <Textarea
+                      id="notes"
                       value={form.notes}
                       onChange={(e) => handleInputChange('notes', e.target.value)}
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="Özel istekleriniz varsa belirtebilirsiniz..."
+                      placeholder="Varsa özel isteklerinizi yazın..."
+                      rows={2}
                     />
                   </div>
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Sipariş Veriliyor...
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        Siparişi Tamamla
+                      </>
+                    )}
+                  </Button>
                 </form>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* Order Summary */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
-                <h3 className="text-xl font-semibold mb-4">Sipariş Özeti</h3>
-                
-                {/* Cart Items */}
-                <div className="space-y-3 mb-6">
-                  {cart.items.map((item) => (
-                    <div key={item.id} className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">🧴</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 line-clamp-1">
-                          {item.product.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {item.quantity} adet × {formatPrice(
-                            item.product.is_campaign && item.product.campaign_price
-                              ? item.product.campaign_price
-                              : item.product.price
-                          )}
-                        </p>
-                      </div>
+          {/* Order Summary */}
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Package className="h-5 w-5 mr-2" />
+                  Sipariş Özeti
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {cart.items.map((item) => (
+                  <div key={item.product.id} className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-sm">{item.product.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {formatPrice(item.product.is_campaign && item.product.campaign_price 
+                          ? item.product.campaign_price 
+                          : item.product.price)} x {item.quantity}
+                      </p>
                     </div>
-                  ))}
-                </div>
-                
-                <div className="space-y-3 mb-6 border-t border-gray-200 pt-4">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Ürün Toplamı:</span>
-                    <span className="font-medium">{formatPrice(cart.totalAmount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Kargo:</span>
-                    <span className="font-medium text-green-600">Ücretsiz</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">KDV:</span>
-                    <span className="font-medium">Dahil</span>
-                  </div>
-                  <div className="border-t border-gray-200 pt-3">
-                    <div className="flex justify-between">
-                      <span className="text-lg font-semibold">Toplam:</span>
-                      <span className="text-xl font-bold text-primary-600">
-                        {formatPrice(cart.totalAmount)}
-                      </span>
+                    <div className="text-sm font-medium">
+                      {formatPrice((item.product.is_campaign && item.product.campaign_price 
+                        ? item.product.campaign_price 
+                        : item.product.price) * item.quantity)}
                     </div>
+                  </div>
+                ))}
+                
+                <Separator />
+                
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Ara Toplam</span>
+                    <span>{formatPrice(cart.totalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Kargo</span>
+                    <span className="text-green-600">Ücretsiz</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Toplam</span>
+                    <span>{formatPrice(cart.totalAmount)}</span>
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Sipariş Veriliyor...' : 'Sipariş Onayla'}
-                </button>
+                <div className="pt-4">
+                  <Badge variant="secondary" className="w-full justify-center">
+                    {cart.totalItems} ürün
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
 
-                <Link
-                  href="/cart"
-                  className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors text-center block mt-3"
-                >
-                  ← Sepete Dön
-                </Link>
-              </div>
-            </div>
+            {/* Payment Info */}
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="text-sm">Ödeme Güvencesi</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground space-y-2">
+                <p>✅ SSL korumalı güvenli ödeme</p>
+                <p>✅ Kapıda ödeme seçeneği</p>
+                <p>✅ Havale/EFT ile ödeme</p>
+                <p>✅ Hızlı teslimat garantisi</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

@@ -21,15 +21,24 @@ CREATE TABLE categories (
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(500) NOT NULL,
+    slug VARCHAR(600) UNIQUE,
     description TEXT,
     price DECIMAL(10,2) NOT NULL CHECK (price >= 0),
     campaign_price DECIMAL(10,2) CHECK (campaign_price >= 0),
     category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
     image_urls TEXT[] DEFAULT '{}',
     stock_quantity INTEGER DEFAULT 0,
+    min_stock_level INTEGER DEFAULT 0,
+    sku VARCHAR(100),
+    variants JSONB,
     is_active BOOLEAN DEFAULT true,
     is_featured BOOLEAN DEFAULT false,
     is_campaign BOOLEAN DEFAULT false,
+    campaign_start_date TIMESTAMP WITH TIME ZONE,
+    campaign_end_date TIMESTAMP WITH TIME ZONE,
+    weight DECIMAL(8,2),
+    dimensions JSONB,
+    tags TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -41,6 +50,7 @@ CREATE TABLE customers (
     phone VARCHAR(20) NOT NULL,
     email VARCHAR(255),
     address TEXT NOT NULL,
+    notes TEXT,
     total_orders INTEGER DEFAULT 0,
     total_spent DECIMAL(12,2) DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -57,8 +67,12 @@ CREATE TABLE orders (
     customer_address TEXT NOT NULL,
     payment_method payment_method NOT NULL,
     status order_status DEFAULT 'pending',
+    subtotal DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
+    shipping_cost DECIMAL(12,2) DEFAULT 0 CHECK (shipping_cost >= 0),
+    tax_amount DECIMAL(12,2) DEFAULT 0 CHECK (tax_amount >= 0),
     total_amount DECIMAL(12,2) NOT NULL CHECK (total_amount >= 0),
     notes TEXT,
+    admin_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -72,6 +86,7 @@ CREATE TABLE order_items (
     product_price DECIMAL(10,2) NOT NULL,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     total_price DECIMAL(12,2) NOT NULL,
+    product_variant JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -112,10 +127,10 @@ INSERT INTO settings (key, value, description) VALUES
 ('contact_email', '"info@temizlikambalaj.com"', 'İletişim e-postası');
 
 -- 10. Sample Products
-INSERT INTO products (name, description, price, category_id, stock_quantity) VALUES
-('Premium Deterjan', 'Yüksek kaliteli çamaşır deterjanı 5L', 45.00, 
+INSERT INTO products (name, slug, description, price, category_id, stock_quantity) VALUES
+('Premium Deterjan', 'premium-deterjan-5l', 'Yüksek kaliteli çamaşır deterjanı 5L', 45.00, 
  (SELECT id FROM categories WHERE name = 'Temizlik Ürünleri'), 100),
-('Plastik Torba Set', 'Çeşitli boyutlarda 100 adet', 25.00, 
+('Plastik Torba Set', 'plastik-torba-set-100-adet', 'Çeşitli boyutlarda 100 adet', 25.00, 
  (SELECT id FROM categories WHERE name = 'Ambalaj Malzemeleri'), 50);
 
 -- ✅ Kurulum Tamamlandı! 
